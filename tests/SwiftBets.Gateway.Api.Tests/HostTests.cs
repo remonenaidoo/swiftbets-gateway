@@ -27,12 +27,11 @@ public sealed class HostTests : IClassFixture<HostTests.Factory>
     }
 
     [Fact]
-    public async Task Unknown_route_returns_the_error_envelope()
+    public async Task Unreachable_upstream_returns_bad_gateway()
     {
-        using var response = await _client.GetAsync(new Uri("/no-such-route", UriKind.Relative), TestContext.Current.CancellationToken);
+        using var response = await _client.GetAsync(new Uri("/api/fixtures/", UriKind.Relative), TestContext.Current.CancellationToken);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        response.Content.Headers.ContentType!.MediaType.ShouldBe("application/problem+json");
+        response.StatusCode.ShouldBe(HttpStatusCode.BadGateway);
     }
 
     [Fact]
@@ -48,6 +47,7 @@ public sealed class HostTests : IClassFixture<HostTests.Factory>
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
         builder.UseSetting("ConnectionStrings:Redis", "127.0.0.1:1,connectTimeout=200");
+            builder.UseSetting("Gateway:IdentityAddress", "http://127.0.0.1:1");
         }
     }
 }

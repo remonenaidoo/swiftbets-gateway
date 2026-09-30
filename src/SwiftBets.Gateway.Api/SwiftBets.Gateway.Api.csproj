@@ -4,6 +4,7 @@
   <ItemGroup>
     <PackageReference Include="SwiftBets.BuildingBlocks.Observability" />
     <PackageReference Include="SwiftBets.BuildingBlocks.Web" />
+    <PackageReference Include="Yarp.ReverseProxy" />
     <ProjectReference Include="../SwiftBets.Gateway.Infrastructure/SwiftBets.Gateway.Infrastructure.csproj" />
   </ItemGroup>
 </Project>
