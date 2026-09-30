@@ -9,7 +9,7 @@
     <PackageVersion Include="SwiftBets.BuildingBlocks.Observability" Version="0.3.1" />
     <PackageVersion Include="SwiftBets.BuildingBlocks.Redis" Version="0.3.1" />
     <PackageVersion Include="SwiftBets.BuildingBlocks.Web" Version="0.3.1" />
-    <PackageVersion Include="SwiftBets.Contracts" Version="0.3.1" />
+    <PackageVersion Include="SwiftBets.Contracts" Version="0.4.1" />
     <PackageVersion Include="xunit.v3" Version="4.0.1" />
     <PackageVersion Include="SwiftBets.BuildingBlocks.Resilience" Version="0.3.1" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.12" />

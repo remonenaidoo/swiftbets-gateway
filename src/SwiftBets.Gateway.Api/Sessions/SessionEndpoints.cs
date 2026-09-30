@@ -1,6 +1,7 @@
 using SwiftBets.BuildingBlocks.Web;
 using SwiftBets.Contracts.Errors;
 using SwiftBets.Gateway.Application.Sessions;
+using SwiftBets.Gateway.Domain;
 
 namespace SwiftBets.Gateway.Api.Sessions;
 
@@ -27,6 +28,13 @@ public static class SessionEndpoints
             return Results.Ok(new { expiresIn = tokens.ExpiresIn });
         });
 
+        // Who the browser session belongs to, for the UI to decide what to show. The token is not verified here:
+        // this only describes the cookie back to its owner, and every service still validates it on each call.
+        session.MapGet("/", (HttpContext context, TimeProvider time) =>
+            context.Request.Cookies[SessionCookies.Access] is { } access && JwtClaims.ReadExpiry(access) is { } expiry && expiry > time.GetUtcNow()
+                ? Results.Ok(new SessionInfo(JwtClaims.ReadString(access, "sub") ?? string.Empty, JwtClaims.ReadStrings(access, "role"), expiry))
+                : new Error("unauthenticated", "No active session.", ErrorKind.Unauthorized).ToHttpResult(context));
+
         session.MapPost("/logout", (HttpContext context) =>
         {
             SessionCookies.Clear(context.Response);
@@ -37,4 +45,6 @@ public static class SessionEndpoints
     }
 
     public sealed record LoginRequest(string Username, string Password);
+
+    public sealed record SessionInfo(string Subject, IReadOnlyList<string> Roles, DateTimeOffset ExpiresAt);
 }

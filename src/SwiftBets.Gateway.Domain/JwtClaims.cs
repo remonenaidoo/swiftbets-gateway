@@ -17,6 +17,17 @@ public static class JwtClaims
     public static string? ReadString(string token, string claim) =>
         Payload(token) is { } payload && payload.TryGetProperty(claim, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
+    /// <summary>A claim that may be a single string or an array of strings (roles are either, depending on count).</summary>
+    public static IReadOnlyList<string> ReadStrings(string token, string claim) =>
+        Payload(token) is { } payload && payload.TryGetProperty(claim, out var value)
+            ? value.ValueKind switch
+            {
+                JsonValueKind.String => [value.GetString()!],
+                JsonValueKind.Array => [.. value.EnumerateArray().Where(v => v.ValueKind == JsonValueKind.String).Select(v => v.GetString()!)],
+                _ => [],
+            }
+            : [];
+
     private static JsonElement? Payload(string token)
     {
         var parts = token.Split('.');
