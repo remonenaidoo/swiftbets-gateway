@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="SwiftBets.BuildingBlocks.Core" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="SwiftBets.BuildingBlocks.Redis" />
+    <ProjectReference Include="../SwiftBets.Gateway.Application/SwiftBets.Gateway.Application.csproj" />
+  </ItemGroup>
+</Project>
