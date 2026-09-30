@@ -4,6 +4,7 @@
   <ItemGroup>
     <PackageReference Include="SwiftBets.Contracts" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="SwiftBets.BuildingBlocks.Core" />
     <ProjectReference Include="../SwiftBets.Gateway.Domain/SwiftBets.Gateway.Domain.csproj" />
   </ItemGroup>
 </Project>

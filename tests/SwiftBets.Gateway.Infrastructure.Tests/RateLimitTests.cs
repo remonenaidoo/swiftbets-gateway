@@ -9,7 +9,7 @@ namespace SwiftBets.Gateway.Infrastructure.Tests;
 
 public sealed class RateLimitTests(RedisFixture redis)
 {
-    private static readonly RateLimitPolicy Tight = new("test", 3, TimeSpan.FromMinutes(1));
+    private static readonly RateLimitPolicy Tight = new("test", 3, TimeSpan.FromMinutes(1), PerUser: false);
 
     [Fact]
     public async Task Requests_within_the_window_limit_are_allowed()

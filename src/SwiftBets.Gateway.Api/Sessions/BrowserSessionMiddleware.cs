@@ -34,7 +34,7 @@ public sealed class BrowserSessionMiddleware(RequestDelegate next, TimeProvider 
             return;
         }
 
-        if (JwtExpiry.Read(access) is { } expiry && expiry - time.GetUtcNow() < TimeSpan.FromSeconds(30)
+        if (JwtClaims.ReadExpiry(access) is { } expiry && expiry - time.GetUtcNow() < TimeSpan.FromSeconds(30)
             && context.Request.Cookies[SessionCookies.Refresh] is { } refresh)
         {
             var renewed = await identity.RefreshAsync(refresh, context.RequestAborted);

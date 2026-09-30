@@ -16,6 +16,7 @@ public static class InfrastructureRegistration
     {
         services.AddSwiftBetsRedis(Required(configuration, "ConnectionStrings:Redis"));
         services.AddFaultInjection(configuration);
+        services.AddValidatedOptions<RateLimitOptions>(configuration, RateLimitOptions.SectionName);
         services.AddSingleton<IRateLimitCounter, RedisRateLimitCounter>();
         services.AddHttpClient<IIdentityClient, IdentityClient>(http => http.BaseAddress = new Uri(Required(configuration, "Gateway:IdentityAddress").TrimEnd('/') + "/"))
             .AddIdempotentResilience();
