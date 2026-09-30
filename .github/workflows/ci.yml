@@ -15,6 +15,6 @@ jobs:
     with:
       images: '[{"name": "swiftbets-gateway", "dockerfile": "deploy/SwiftBets.Gateway.Api.Dockerfile"}]'
     permissions:
-      contents: write
+      contents: read
       packages: write
       security-events: write
