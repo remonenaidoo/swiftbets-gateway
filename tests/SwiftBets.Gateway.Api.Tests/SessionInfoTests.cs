@@ -95,9 +95,12 @@ public sealed class SessionInfoTests(HostTests.Factory factory) : IClassFixture<
         request.Headers.UserAgent.ParseAdd(device);
         using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var setCookie = response.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith($"{SessionCookies.Session}=", StringComparison.Ordinal));
+        var cookies = response.Headers.GetValues("Set-Cookie").Where(c => c.StartsWith($"{SessionCookies.Session}=", StringComparison.Ordinal)).ToList();
+        var setCookie = cookies.Single(c => !c.StartsWith($"{SessionCookies.Session}=;", StringComparison.Ordinal));
         setCookie.ShouldContain("httponly", Case.Insensitive);
         setCookie.ShouldContain("samesite=strict", Case.Insensitive);
+        setCookie.ShouldContain("path=/;", Case.Insensitive);
+        cookies.ShouldContain(c => c.StartsWith($"{SessionCookies.Session}=;", StringComparison.Ordinal) && c.Contains("path=/api", StringComparison.OrdinalIgnoreCase));
         return setCookie.Split(';')[0][(SessionCookies.Session.Length + 1)..];
     }
 
