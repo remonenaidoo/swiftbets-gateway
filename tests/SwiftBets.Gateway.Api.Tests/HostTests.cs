@@ -52,6 +52,9 @@ public sealed class HostTests : IClassFixture<HostTests.Factory>
         {
             builder.UseSetting("ConnectionStrings:Redis", "127.0.0.1:1,connectTimeout=200");
             builder.UseSetting("Gateway:IdentityAddress", "http://127.0.0.1:1");
+            builder.UseSetting("Kafka:BootstrapServers", "127.0.0.1:9");
+            builder.UseSetting("Kafka:Environment", "test");
+            builder.UseSetting("Kafka:ClientId", "gateway-tests");
             builder.ConfigureTestServices(services =>
             {
                 services.AddSingleton<ISessionStore, InMemorySessionStore>();

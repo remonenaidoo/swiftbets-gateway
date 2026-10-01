@@ -81,6 +81,14 @@ public sealed class BrowserSessions(ISessionStore store, IIdentityClient identit
         }
     }
 
+    /// <summary>Drops every browser session of a user whose refresh tokens identity has already revoked (suspension, exclusion).</summary>
+    public async Task<int> DropAllAsync(string userId)
+    {
+        var sessions = await store.ListAsync(userId);
+        await store.DeleteAllAsync(userId);
+        return sessions.Count;
+    }
+
     public async Task EndAsync(SessionResolution resolution)
     {
         await store.DeleteAsync(resolution.Session.UserId, resolution.SessionHash);
