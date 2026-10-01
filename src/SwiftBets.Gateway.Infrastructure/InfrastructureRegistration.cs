@@ -5,9 +5,11 @@ using SwiftBets.BuildingBlocks.Messaging;
 using SwiftBets.BuildingBlocks.Redis;
 using SwiftBets.BuildingBlocks.Resilience;
 using SwiftBets.Gateway.Application.RateLimiting;
+using SwiftBets.Contracts.Compliance;
 using SwiftBets.Contracts.Identity;
 using SwiftBets.Contracts.Messaging;
 using SwiftBets.Gateway.Application.Sessions;
+using SwiftBets.Gateway.Infrastructure.Compliance;
 using SwiftBets.Gateway.Infrastructure.Messaging;
 using SwiftBets.Gateway.Infrastructure.RateLimiting;
 using SwiftBets.Gateway.Infrastructure.Sessions;
@@ -28,6 +30,8 @@ public static class InfrastructureRegistration
             .AddIdempotentResilience();
         services.AddKafkaMessaging(configuration);
         services.AddKafkaConsumer<SessionRevokedV1, SessionRevokedConsumer>(Topics.SessionRevoked, "gateway.sessions", startAtLatest: true);
+        services.AddCompactedState<RestrictionsChangedV1>(Topics.RestrictionsChanged);
+        services.AddSingleton<ISessionLimits, CompactedSessionLimits>();
         return services;
     }
 
