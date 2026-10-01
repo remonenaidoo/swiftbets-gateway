@@ -28,6 +28,32 @@ public static class SessionEndpoints
             return Results.Ok(new { expiresIn = tokens.ExpiresIn });
         });
 
+        // Demo sign-in for an open preview: signs the browser in as the configured demo account with no form.
+        // Off unless Gateway:DemoSignIn:Username and Password are configured; 404 otherwise.
+        session.MapPost("/demo", async (HttpContext context, IIdentityClient identity, IConfiguration configuration) =>
+        {
+            var username = configuration["Gateway:DemoSignIn:Username"];
+            var password = configuration["Gateway:DemoSignIn:Password"];
+            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+            {
+                return Error.NotFound("demo_sign_in_disabled", "Demo sign-in is not enabled here.").ToHttpResult(context);
+            }
+
+            if (context.Request.Headers[SessionCookies.CsrfHeader] != "1")
+            {
+                return Error.Validation("csrf_required", $"Send {SessionCookies.CsrfHeader}: 1.").ToHttpResult(context);
+            }
+
+            var tokens = await identity.SignInAsync(username, password, context.RequestAborted);
+            if (tokens is null)
+            {
+                return new Error("invalid_credentials", "The demo account could not sign in.", ErrorKind.Unauthorized).ToHttpResult(context);
+            }
+
+            SessionCookies.Write(context.Response, tokens);
+            return Results.Ok(new { expiresIn = tokens.ExpiresIn });
+        });
+
         // Who the browser session belongs to, for the UI to decide what to show. The token is not verified here:
         // this only describes the cookie back to its owner, and every service still validates it on each call.
         session.MapGet("/", (HttpContext context, TimeProvider time) =>

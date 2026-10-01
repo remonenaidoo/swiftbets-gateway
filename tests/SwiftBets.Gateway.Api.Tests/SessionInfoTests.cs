@@ -30,6 +30,17 @@ public sealed class SessionInfoTests(HostTests.Factory factory) : IClassFixture<
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
+    [Fact]
+    public async Task Demo_sign_in_is_off_unless_configured()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri("/api/session/demo", UriKind.Relative));
+        request.Headers.Add("X-SwiftBets-Csrf", "1");
+
+        using var response = await factory.CreateClient().SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
     private static string Token(DateTimeOffset expires)
     {
         static string Part(object value) => Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value))).TrimEnd('=').Replace('+', '-').Replace('/', '_');
