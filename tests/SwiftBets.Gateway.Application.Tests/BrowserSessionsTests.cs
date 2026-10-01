@@ -97,6 +97,20 @@ public sealed class BrowserSessionsTests
 
         (await sessions.ResolveAsync(phone, CancellationToken.None)).ShouldBeNull();
         (await sessions.ResolveAsync(laptop, CancellationToken.None)).ShouldBeNull();
+        identity.Revoked.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Signing_out_also_stops_identity_honouring_the_refresh_token()
+    {
+        var (sessions, identity) = Create(_time);
+        var tokens = identity.Issue();
+        var sessionId = await sessions.StartAsync(tokens, "Firefox");
+
+        await sessions.EndAsync((await sessions.ResolveAsync(sessionId, CancellationToken.None))!);
+
+        identity.Revoked.ShouldBe([tokens.RefreshToken]);
+        (await identity.RefreshAsync(tokens.RefreshToken, CancellationToken.None)).ShouldBeNull();
     }
 
     [Theory]

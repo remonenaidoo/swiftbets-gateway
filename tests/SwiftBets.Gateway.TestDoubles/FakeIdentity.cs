@@ -36,6 +36,19 @@ public sealed class FakeIdentity(TimeProvider time, string subject = "punter-1",
         }
     }
 
+    public Task RevokeAsync(string refreshToken, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            _issuedRefreshTokens.Remove(refreshToken);
+            Revoked.Add(refreshToken);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public List<string> Revoked { get; } = [];
+
     public SessionTokens Issue()
     {
         var refresh = Guid.NewGuid().ToString("N");

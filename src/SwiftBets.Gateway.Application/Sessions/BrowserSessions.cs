@@ -67,12 +67,25 @@ public sealed class BrowserSessions(ISessionStore store, IIdentityClient identit
         }
 
         await store.DeleteAsync(userId, match.Hash);
+        await identity.RevokeAsync(match.Session.RefreshToken, CancellationToken.None);
         return true;
     }
 
-    public Task RevokeAllAsync(string userId) => store.DeleteAllAsync(userId);
+    public async Task RevokeAllAsync(string userId)
+    {
+        var sessions = await store.ListAsync(userId);
+        await store.DeleteAllAsync(userId);
+        foreach (var (_, session) in sessions)
+        {
+            await identity.RevokeAsync(session.RefreshToken, CancellationToken.None);
+        }
+    }
 
-    public Task EndAsync(SessionResolution resolution) => store.DeleteAsync(resolution.Session.UserId, resolution.SessionHash);
+    public async Task EndAsync(SessionResolution resolution)
+    {
+        await store.DeleteAsync(resolution.Session.UserId, resolution.SessionHash);
+        await identity.RevokeAsync(resolution.Session.RefreshToken, CancellationToken.None);
+    }
 
     private async Task<SessionResolution?> RefreshAsync(BrowserSession session, string hash, CancellationToken cancellationToken)
     {
