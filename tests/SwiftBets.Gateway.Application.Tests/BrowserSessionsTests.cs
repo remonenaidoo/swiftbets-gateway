@@ -101,6 +101,20 @@ public sealed class BrowserSessionsTests
     }
 
     [Fact]
+    public async Task Dropping_every_session_after_identity_revoked_them_does_not_call_identity_again()
+    {
+        var (sessions, identity) = Create(_time);
+        var phone = await sessions.StartAsync(identity.Issue(), "Phone");
+        var laptop = await sessions.StartAsync(identity.Issue(), "Laptop");
+
+        (await sessions.DropAllAsync("punter-1")).ShouldBe(2);
+
+        (await sessions.ResolveAsync(phone, CancellationToken.None)).ShouldBeNull();
+        (await sessions.ResolveAsync(laptop, CancellationToken.None)).ShouldBeNull();
+        identity.Revoked.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task Signing_out_also_stops_identity_honouring_the_refresh_token()
     {
         var (sessions, identity) = Create(_time);
