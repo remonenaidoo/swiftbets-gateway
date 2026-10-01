@@ -25,7 +25,24 @@ public sealed class BrowserSessionMiddlewareTests
         context.Response.StatusCode.ShouldBe(StatusCodes.Status403Forbidden);
     }
 
-    private static async Task<(HttpContext Context, bool Forwarded)> RunAsync(bool csrf)
+    [Fact]
+    public async Task Cookie_session_is_used_even_when_a_proxy_adds_basic_credentials()
+    {
+        var (context, forwarded) = await RunAsync(csrf: true, authorization: "Basic c3dpZnRiZXRzOnB3");
+
+        forwarded.ShouldBeTrue();
+        context.Request.Headers.Authorization.ToString().ShouldBe("Bearer header.payload.signature");
+    }
+
+    [Fact]
+    public async Task Explicit_bearer_token_is_left_as_sent()
+    {
+        var (context, _) = await RunAsync(csrf: true, authorization: "Bearer native.client.token");
+
+        context.Request.Headers.Authorization.ToString().ShouldBe("Bearer native.client.token");
+    }
+
+    private static async Task<(HttpContext Context, bool Forwarded)> RunAsync(bool csrf, string? authorization = null)
     {
         var forwarded = false;
         var middleware = new BrowserSessionMiddleware(_ => { forwarded = true; return Task.CompletedTask; }, TimeProvider.System);
@@ -38,6 +55,11 @@ public sealed class BrowserSessionMiddlewareTests
         if (csrf)
         {
             context.Request.Headers[SessionCookies.CsrfHeader] = "1";
+        }
+
+        if (authorization is not null)
+        {
+            context.Request.Headers.Authorization = authorization;
         }
 
         await middleware.InvokeAsync(context, new NoIdentity());

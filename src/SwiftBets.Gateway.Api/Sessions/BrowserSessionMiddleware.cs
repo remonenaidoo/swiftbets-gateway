@@ -20,8 +20,11 @@ public sealed class BrowserSessionMiddleware(RequestDelegate next, TimeProvider 
             context.Request.Headers.Remove(header);
         }
 
+        // An explicit bearer token (a native client) wins. Any other Authorization header, such as Basic credentials
+        // from a password-gated preview proxy in front of the gateway, is not ours and must not hide the session.
         var access = context.Request.Cookies[SessionCookies.Access];
-        if (access is null || context.Request.Headers.Authorization.Count > 0)
+        var hasBearer = context.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase);
+        if (access is null || hasBearer)
         {
             await next(context);
             return;
