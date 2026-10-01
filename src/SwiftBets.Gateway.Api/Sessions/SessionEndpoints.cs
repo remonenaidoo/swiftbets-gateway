@@ -28,30 +28,27 @@ public static class SessionEndpoints
             return Results.Ok(new { expiresIn = tokens.ExpiresIn });
         });
 
-        // Demo sign-in for an open preview: signs the browser in as the configured demo account with no form.
-        // Off unless Gateway:DemoSignIn:Username and Password are configured; 404 otherwise.
-        session.MapPost("/demo", async (HttpContext context, IIdentityClient identity, IConfiguration configuration) =>
+        // Demo sign-in for an open preview: signs the visitor in as a demo account with no form. `as=punter` is the
+        // betting site's account, anything else the operator's. Off unless the accounts are configured; 404 otherwise.
+        session.MapPost("/demo", async (string? @as, HttpContext context, IIdentityClient identity, IConfiguration configuration) =>
         {
-            var username = configuration["Gateway:DemoSignIn:Username"];
-            var password = configuration["Gateway:DemoSignIn:Password"];
-            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+            var tokens = await DemoSignInAsync(@as, context, identity, configuration);
+            if (tokens.Error is { } error)
             {
-                return Error.NotFound("demo_sign_in_disabled", "Demo sign-in is not enabled here.").ToHttpResult(context);
+                return error.ToHttpResult(context);
             }
 
-            if (context.Request.Headers[SessionCookies.CsrfHeader] != "1")
-            {
-                return Error.Validation("csrf_required", $"Send {SessionCookies.CsrfHeader}: 1.").ToHttpResult(context);
-            }
+            SessionCookies.Write(context.Response, tokens.Value!);
+            return Results.Ok(new { expiresIn = tokens.Value!.ExpiresIn });
+        });
 
-            var tokens = await identity.SignInAsync(username, password, context.RequestAborted);
-            if (tokens is null)
-            {
-                return new Error("invalid_credentials", "The demo account could not sign in.", ErrorKind.Unauthorized).ToHttpResult(context);
-            }
-
-            SessionCookies.Write(context.Response, tokens);
-            return Results.Ok(new { expiresIn = tokens.ExpiresIn });
+        // The same for native apps, which hold tokens instead of cookies.
+        session.MapPost("/demo/token", async (string? @as, HttpContext context, IIdentityClient identity, IConfiguration configuration) =>
+        {
+            var tokens = await DemoSignInAsync(@as, context, identity, configuration);
+            return tokens.Error is { } error
+                ? error.ToHttpResult(context)
+                : Results.Ok(new { accessToken = tokens.Value!.AccessToken, refreshToken = tokens.Value.RefreshToken, expiresIn = tokens.Value.ExpiresIn });
         });
 
         // Who the browser session belongs to, for the UI to decide what to show. The token is not verified here:
@@ -68,6 +65,27 @@ public static class SessionEndpoints
         });
 
         return endpoints;
+    }
+
+    private static async Task<(SessionTokens? Value, Error? Error)> DemoSignInAsync(string? role, HttpContext context, IIdentityClient identity, IConfiguration configuration)
+    {
+        var punter = string.Equals(role, "punter", StringComparison.OrdinalIgnoreCase);
+        var username = configuration[punter ? "Gateway:DemoSignIn:PunterUsername" : "Gateway:DemoSignIn:Username"];
+        var password = configuration["Gateway:DemoSignIn:Password"];
+        if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+        {
+            return (null, Error.NotFound("demo_sign_in_disabled", "Demo sign-in is not enabled here."));
+        }
+
+        if (context.Request.Headers[SessionCookies.CsrfHeader] != "1")
+        {
+            return (null, Error.Validation("csrf_required", $"Send {SessionCookies.CsrfHeader}: 1."));
+        }
+
+        var tokens = await identity.SignInAsync(username, password, context.RequestAborted);
+        return tokens is null
+            ? (null, new Error("invalid_credentials", "The demo account could not sign in.", ErrorKind.Unauthorized))
+            : (tokens, null);
     }
 
     public sealed record LoginRequest(string Username, string Password);
