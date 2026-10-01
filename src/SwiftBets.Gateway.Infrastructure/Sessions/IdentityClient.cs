@@ -11,6 +11,18 @@ public sealed class IdentityClient(HttpClient http) : IIdentityClient
     public Task<SessionTokens?> RefreshAsync(string refreshToken, CancellationToken cancellationToken) =>
         PostAsync("auth/refresh", new { refreshToken }, cancellationToken);
 
+    public async Task RevokeAsync(string refreshToken, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await http.PostAsJsonAsync("auth/revoke", new { refreshToken }, cancellationToken);
+        }
+        catch (HttpRequestException)
+        {
+            // The session is already gone at the gateway; an unrevoked refresh token expires on its own.
+        }
+    }
+
     private async Task<SessionTokens?> PostAsync(string path, object body, CancellationToken cancellationToken)
     {
         using var response = await http.PostAsJsonAsync(path, body, cancellationToken);

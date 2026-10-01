@@ -1,17 +1,19 @@
+using Microsoft.Extensions.Options;
 using SwiftBets.BuildingBlocks.Web;
 using SwiftBets.Contracts.Errors;
 using SwiftBets.Gateway.Application.Sessions;
-using SwiftBets.Gateway.Domain;
 
 namespace SwiftBets.Gateway.Api.Sessions;
 
 public static class SessionEndpoints
 {
+    private const int DeviceMaxLength = 160;
+
     public static IEndpointRouteBuilder MapSessionEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var session = endpoints.MapGroup("/api/session");
 
-        session.MapPost("/login", async (LoginRequest request, HttpContext context, IIdentityClient identity) =>
+        session.MapPost("/login", async (LoginRequest request, HttpContext context, IIdentityClient identity, BrowserSessions sessions, IOptions<BrowserSessionOptions> options) =>
         {
             if (context.Request.Headers[SessionCookies.CsrfHeader] != "1")
             {
@@ -19,27 +21,17 @@ public static class SessionEndpoints
             }
 
             var tokens = await identity.SignInAsync(request.Username, request.Password, context.RequestAborted);
-            if (tokens is null)
-            {
-                return new Error("invalid_credentials", "Username or password is incorrect.", ErrorKind.Unauthorized).ToHttpResult(context);
-            }
-
-            SessionCookies.Write(context.Response, tokens);
-            return Results.Ok(new { expiresIn = tokens.ExpiresIn });
+            return tokens is null
+                ? new Error("invalid_credentials", "Username or password is incorrect.", ErrorKind.Unauthorized).ToHttpResult(context)
+                : await StartAsync(context, tokens, sessions, options);
         });
 
         // Demo sign-in for an open preview: signs the visitor in as a demo account with no form. `as=punter` is the
         // betting site's account, anything else the operator's. Off unless the accounts are configured; 404 otherwise.
-        session.MapPost("/demo", async (string? @as, HttpContext context, IIdentityClient identity, IConfiguration configuration) =>
+        session.MapPost("/demo", async (string? @as, HttpContext context, IIdentityClient identity, IConfiguration configuration, BrowserSessions sessions, IOptions<BrowserSessionOptions> options) =>
         {
             var tokens = await DemoSignInAsync(@as, context, identity, configuration);
-            if (tokens.Error is { } error)
-            {
-                return error.ToHttpResult(context);
-            }
-
-            SessionCookies.Write(context.Response, tokens.Value!);
-            return Results.Ok(new { expiresIn = tokens.Value!.ExpiresIn });
+            return tokens.Error is { } error ? error.ToHttpResult(context) : await StartAsync(context, tokens.Value!, sessions, options);
         });
 
         // The same for native apps, which hold tokens instead of cookies.
@@ -51,20 +43,85 @@ public static class SessionEndpoints
                 : Results.Ok(new { accessToken = tokens.Value!.AccessToken, refreshToken = tokens.Value.RefreshToken, expiresIn = tokens.Value.ExpiresIn });
         });
 
-        // Who the browser session belongs to, for the UI to decide what to show. The token is not verified here:
-        // this only describes the cookie back to its owner, and every service still validates it on each call.
-        session.MapGet("/", (HttpContext context, TimeProvider time) =>
-            context.Request.Cookies[SessionCookies.Access] is { } access && JwtClaims.ReadExpiry(access) is { } expiry && expiry > time.GetUtcNow()
-                ? Results.Ok(new SessionInfo(JwtClaims.ReadString(access, "sub") ?? string.Empty, JwtClaims.ReadStrings(access, "role"), expiry))
-                : new Error("unauthenticated", "No active session.", ErrorKind.Unauthorized).ToHttpResult(context));
+        // Who the browser session belongs to, for the UI to decide what to show. Every service still validates the
+        // token it receives; this only describes the session back to its owner.
+        session.MapGet("/", (HttpContext context) =>
+            Current(context) is { } current
+                ? Results.Ok(new SessionInfo(current.Session.UserId, current.Session.Roles, current.Session.AccessExpiresAt))
+                : Unauthenticated(context));
 
-        session.MapPost("/logout", (HttpContext context) =>
+        session.MapPost("/logout", async (HttpContext context, BrowserSessions sessions) =>
         {
+            if (Current(context) is { } current)
+            {
+                await sessions.EndAsync(current);
+            }
+
+            SessionCookies.Clear(context.Response);
+            return Results.NoContent();
+        });
+
+        session.MapGet("/devices", async (HttpContext context, BrowserSessions sessions) =>
+        {
+            if (Current(context) is not { } current)
+            {
+                return Unauthenticated(context);
+            }
+
+            var devices = await sessions.ListAsync(current.Session.UserId);
+            return Results.Ok(devices.Select(d => new DeviceInfo(d.Session.PublicId, d.Session.Device, d.Session.CreatedAt, d.Session.LastSeenAt, d.Hash == current.SessionHash)));
+        });
+
+        session.MapDelete("/devices/{publicId:guid}", async (Guid publicId, HttpContext context, BrowserSessions sessions) =>
+        {
+            if (Current(context) is not { } current)
+            {
+                return Unauthenticated(context);
+            }
+
+            if (!await sessions.RevokeAsync(current.Session.UserId, publicId))
+            {
+                return Error.NotFound("session_not_found", "No such session.").ToHttpResult(context);
+            }
+
+            if (publicId == current.Session.PublicId)
+            {
+                SessionCookies.Clear(context.Response);
+            }
+
+            return Results.NoContent();
+        });
+
+        session.MapDelete("/devices", async (HttpContext context, BrowserSessions sessions) =>
+        {
+            if (Current(context) is not { } current)
+            {
+                return Unauthenticated(context);
+            }
+
+            await sessions.RevokeAllAsync(current.Session.UserId);
             SessionCookies.Clear(context.Response);
             return Results.NoContent();
         });
 
         return endpoints;
+    }
+
+    public static string DeviceOf(HttpContext context) =>
+        context.Request.Headers.UserAgent.ToString() is { Length: > 0 } agent ? agent[..Math.Min(agent.Length, DeviceMaxLength)] : "unknown device";
+
+    private static SessionResolution? Current(HttpContext context) =>
+        context.Items.TryGetValue(BrowserSessionMiddleware.SessionItem, out var value) ? value as SessionResolution : null;
+
+    private static IResult Unauthenticated(HttpContext context) =>
+        new Error("unauthenticated", "No active session.", ErrorKind.Unauthorized).ToHttpResult(context);
+
+    private static async Task<IResult> StartAsync(HttpContext context, SessionTokens tokens, BrowserSessions sessions, IOptions<BrowserSessionOptions> options)
+    {
+        var sessionId = await sessions.StartAsync(tokens, DeviceOf(context));
+        SessionCookies.ClearLegacy(context.Response);
+        SessionCookies.Write(context.Response, sessionId, TimeSpan.FromDays(options.Value.LifetimeDays));
+        return Results.Ok(new { expiresIn = tokens.ExpiresIn });
     }
 
     private static async Task<(SessionTokens? Value, Error? Error)> DemoSignInAsync(string? role, HttpContext context, IIdentityClient identity, IConfiguration configuration)
@@ -91,4 +148,6 @@ public static class SessionEndpoints
     public sealed record LoginRequest(string Username, string Password);
 
     public sealed record SessionInfo(string Subject, IReadOnlyList<string> Roles, DateTimeOffset ExpiresAt);
+
+    public sealed record DeviceInfo(Guid Id, string Device, DateTimeOffset CreatedAt, DateTimeOffset LastSeenAt, bool Current);
 }
