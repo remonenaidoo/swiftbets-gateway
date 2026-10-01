@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using SwiftBets.Gateway.Api.Sessions;
 using SwiftBets.Gateway.Application.Sessions;
 using SwiftBets.Gateway.TestDoubles;
@@ -9,7 +10,30 @@ namespace SwiftBets.Gateway.Api.Tests;
 public sealed class BrowserSessionMiddlewareTests
 {
     private readonly InMemorySessionStore _store = new();
-    private readonly FakeIdentity _identity = new(TimeProvider.System);
+    private readonly FakeTimeProvider _time = new(DateTimeOffset.UtcNow);
+    private readonly FakeIdentity _identity;
+    private ISessionLimits _limits = FixedSessionLimits.None;
+
+    public BrowserSessionMiddlewareTests() => _identity = new FakeIdentity(_time);
+
+    [Fact]
+    public async Task Session_is_ended_once_the_customers_own_time_limit_is_used_up()
+    {
+        _limits = new FixedSessionLimits(new SessionLimits(60, 30));
+        var sessionId = await Sessions().StartAsync(_identity.Issue(), "Firefox");
+        _time.Advance(TimeSpan.FromMinutes(59));
+        (await RunAsync($"{SessionCookies.Session}={sessionId}", csrf: true)).Forwarded.ShouldBeTrue();
+
+        _time.Advance(TimeSpan.FromMinutes(1));
+        var (context, forwarded) = await RunAsync($"{SessionCookies.Session}={sessionId}", csrf: true);
+
+        forwarded.ShouldBeFalse();
+        context.Response.StatusCode.ShouldBe(StatusCodes.Status401Unauthorized);
+        context.Response.Headers.SetCookie.ToString().ShouldContain($"{SessionCookies.Session}=;");
+        _store.Count.ShouldBe(0);
+        context.Response.Body.Position = 0;
+        (await new StreamReader(context.Response.Body).ReadToEndAsync(TestContext.Current.CancellationToken)).ShouldContain("session_time_limit");
+    }
 
     [Fact]
     public async Task Cookie_mutation_with_the_csrf_header_is_forwarded_as_a_bearer_token_without_spoofed_identity()
@@ -83,7 +107,7 @@ public sealed class BrowserSessionMiddlewareTests
         cookies.ShouldNotContain(legacy.AccessToken);
     }
 
-    private BrowserSessions Sessions() => new(_store, _identity, Options.Create(new BrowserSessionOptions()), TimeProvider.System);
+    private BrowserSessions Sessions() => new(_store, _identity, Options.Create(new BrowserSessionOptions()), _time);
 
     private static string SessionId() => Gateway.Domain.SessionId.New();
 
@@ -107,7 +131,7 @@ public sealed class BrowserSessionMiddlewareTests
             context.Request.Headers.Authorization = authorization;
         }
 
-        await middleware.InvokeAsync(context, Sessions(), _identity, Options.Create(new BrowserSessionOptions()));
+        await middleware.InvokeAsync(context, Sessions(), _identity, Options.Create(new BrowserSessionOptions()), _limits, _time);
         return (context, forwarded);
     }
 }

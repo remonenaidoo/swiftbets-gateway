@@ -16,7 +16,7 @@ public sealed class BrowserSessionMiddleware(RequestDelegate next)
 
     private static readonly string[] SpoofableHeaders = ["X-User-Id", "X-User-Roles", "X-Forwarded-User", "X-Authenticated-User"];
 
-    public async Task InvokeAsync(HttpContext context, BrowserSessions sessions, IIdentityClient identity, IOptions<BrowserSessionOptions> options)
+    public async Task InvokeAsync(HttpContext context, BrowserSessions sessions, IIdentityClient identity, IOptions<BrowserSessionOptions> options, ISessionLimits limits, TimeProvider time)
     {
         foreach (var header in SpoofableHeaders)
         {
@@ -58,6 +58,15 @@ public sealed class BrowserSessionMiddleware(RequestDelegate next)
         {
             SessionCookies.Clear(context.Response);
             await ErrorEnvelopes.WriteAsync(context, ErrorEnvelopes.Create(context, StatusCodes.Status401Unauthorized, "session_expired", "Sign in again."));
+            return;
+        }
+
+        // The customer's own session-time limit (compliance): once used up, this browser is signed out (E2 feature 3).
+        if (limits.For(resolution.Session.UserId).Exhausted(resolution.Session.CreatedAt, time.GetUtcNow()))
+        {
+            await sessions.EndAsync(resolution);
+            SessionCookies.Clear(context.Response);
+            await ErrorEnvelopes.WriteAsync(context, ErrorEnvelopes.Create(context, StatusCodes.Status401Unauthorized, "session_time_limit", "You reached the session time you set. Take a break before signing in again."));
             return;
         }
 
