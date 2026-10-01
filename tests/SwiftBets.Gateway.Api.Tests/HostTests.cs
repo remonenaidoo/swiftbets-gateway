@@ -1,6 +1,10 @@
 using System.Net;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using SwiftBets.Gateway.Application.Sessions;
+using SwiftBets.Gateway.TestDoubles;
 
 namespace SwiftBets.Gateway.Api.Tests;
 
@@ -46,8 +50,13 @@ public sealed class HostTests : IClassFixture<HostTests.Factory>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-        builder.UseSetting("ConnectionStrings:Redis", "127.0.0.1:1,connectTimeout=200");
+            builder.UseSetting("ConnectionStrings:Redis", "127.0.0.1:1,connectTimeout=200");
             builder.UseSetting("Gateway:IdentityAddress", "http://127.0.0.1:1");
+            builder.ConfigureTestServices(services =>
+            {
+                services.AddSingleton<ISessionStore, InMemorySessionStore>();
+                services.AddSingleton<IIdentityClient>(new FakeIdentity(TimeProvider.System, "operator-1", "Operator"));
+            });
         }
     }
 }

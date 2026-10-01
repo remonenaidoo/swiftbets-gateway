@@ -18,6 +18,8 @@ public static class InfrastructureRegistration
         services.AddFaultInjection(configuration);
         services.AddValidatedOptions<RateLimitOptions>(configuration, RateLimitOptions.SectionName);
         services.AddSingleton<IRateLimitCounter, RedisRateLimitCounter>();
+        services.AddValidatedOptions<BrowserSessionOptions>(configuration, BrowserSessionOptions.SectionName);
+        services.AddSingleton<ISessionStore, RedisSessionStore>();
         services.AddHttpClient<IIdentityClient, IdentityClient>(http => http.BaseAddress = new Uri(Required(configuration, "Gateway:IdentityAddress").TrimEnd('/') + "/"))
             .AddIdempotentResilience();
         return services;

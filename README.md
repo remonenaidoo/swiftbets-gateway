@@ -2,7 +2,7 @@
 
 [![ci](https://github.com/remonenaidoo/swiftbets-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/remonenaidoo/swiftbets-gateway/actions/workflows/ci.yml)
 
-The single public origin of SwiftBets: a YARP backend-for-frontend that turns the dashboard session cookie (httpOnly, Secure, SameSite=Strict, plus a required CSRF header on mutations) into a bearer token downstream, passes mobile bearer tokens through, strips inbound identity headers, and enforces Redis-backed per-route rate limits.
+The single public origin of SwiftBets: a YARP backend-for-frontend that turns an opaque browser session cookie (httpOnly, Secure, SameSite=Strict, plus a required CSRF header on mutations) into a bearer token downstream. Tokens stay in a Redis session the browser never sees; sessions rotate on refresh, are listed and revoked per device at `/api/session/devices`, and refresh is single-flight so a single-use refresh token is never spent twice. It passes mobile bearer tokens through, strips inbound identity headers, and enforces Redis-backed per-route rate limits.
 
 ## Hosts
 
@@ -10,7 +10,7 @@ The single public origin of SwiftBets: a YARP backend-for-frontend that turns th
 
 ## Data and events
 
-- **Owns:** Redis (rate-limit windows).
+- **Owns:** Redis (rate-limit windows, browser sessions and the per-user session index).
 - **Events:** None; HTTP only.
 
 ## Layout

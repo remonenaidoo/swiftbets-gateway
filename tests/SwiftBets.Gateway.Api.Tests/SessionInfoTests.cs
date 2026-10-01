@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
 using SwiftBets.Gateway.Api.Sessions;
 
@@ -9,17 +8,51 @@ namespace SwiftBets.Gateway.Api.Tests;
 public sealed class SessionInfoTests(HostTests.Factory factory) : IClassFixture<HostTests.Factory>
 {
     [Fact]
-    public async Task Signed_in_browser_learns_its_subject_and_roles()
+    public async Task Signed_in_browser_holds_only_an_opaque_cookie_and_learns_its_subject_and_roles()
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri("/api/session", UriKind.Relative));
-        request.Headers.Add("Cookie", $"{SessionCookies.Access}={Token(DateTimeOffset.UtcNow.AddMinutes(5))}");
+        var client = factory.CreateClient();
+        var cookie = await SignInAsync(client);
 
-        using var response = await factory.CreateClient().SendAsync(request, TestContext.Current.CancellationToken);
+        using var response = await SendAsync(client, HttpMethod.Get, "/api/session", cookie);
 
+        cookie.ShouldNotContain(".");
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         body.GetProperty("subject").GetString().ShouldBe("operator-1");
         body.GetProperty("roles").EnumerateArray().Select(r => r.GetString()).ShouldBe(["Operator"]);
+    }
+
+    [Fact]
+    public async Task Browser_lists_its_devices_and_signing_out_everywhere_ends_them()
+    {
+        var client = factory.CreateClient();
+        var laptop = await SignInAsync(client, "Laptop");
+        var phone = await SignInAsync(client, "Phone");
+
+        using var devices = await SendAsync(client, HttpMethod.Get, "/api/session/devices", laptop);
+        var listed = await devices.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        listed.EnumerateArray().Select(d => d.GetProperty("device").GetString()).ShouldContain("Phone");
+        listed.EnumerateArray().Single(d => d.GetProperty("current").GetBoolean()).GetProperty("device").GetString().ShouldBe("Laptop");
+
+        using var everywhere = await SendAsync(client, HttpMethod.Delete, "/api/session/devices", laptop);
+        everywhere.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        using var afterwards = await SendAsync(client, HttpMethod.Get, "/api/session", phone);
+        afterwards.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Wrong_password_creates_no_session()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri("/api/session/login", UriKind.Relative))
+        {
+            Content = JsonContent.Create(new { username = "operator1", password = "wrong" }),
+        };
+        request.Headers.Add(SessionCookies.CsrfHeader, "1");
+
+        using var response = await factory.CreateClient().SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        response.Headers.Contains("Set-Cookie").ShouldBeFalse();
     }
 
     [Fact]
@@ -52,9 +85,27 @@ public sealed class SessionInfoTests(HostTests.Factory factory) : IClassFixture<
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
-    private static string Token(DateTimeOffset expires)
+    private static async Task<string> SignInAsync(HttpClient client, string device = "Firefox")
     {
-        static string Part(object value) => Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value))).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        return $"{Part(new { alg = "RS256" })}.{Part(new { sub = "operator-1", role = "Operator", exp = expires.ToUnixTimeSeconds() })}.signature";
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri("/api/session/login", UriKind.Relative))
+        {
+            Content = JsonContent.Create(new { username = "operator1", password = "right" }),
+        };
+        request.Headers.Add(SessionCookies.CsrfHeader, "1");
+        request.Headers.UserAgent.ParseAdd(device);
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var setCookie = response.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith($"{SessionCookies.Session}=", StringComparison.Ordinal));
+        setCookie.ShouldContain("httponly", Case.Insensitive);
+        setCookie.ShouldContain("samesite=strict", Case.Insensitive);
+        return setCookie.Split(';')[0][(SessionCookies.Session.Length + 1)..];
+    }
+
+    private static Task<HttpResponseMessage> SendAsync(HttpClient client, HttpMethod method, string path, string sessionId)
+    {
+        var request = new HttpRequestMessage(method, new Uri(path, UriKind.Relative));
+        request.Headers.Add("Cookie", $"{SessionCookies.Session}={sessionId}");
+        request.Headers.Add(SessionCookies.CsrfHeader, "1");
+        return client.SendAsync(request, TestContext.Current.CancellationToken);
     }
 }
