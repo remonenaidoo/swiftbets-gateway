@@ -43,6 +43,7 @@ public sealed class HostTests : IClassFixture<HostTests.Factory>
     [InlineData("/api/casino/lobby")]
     [InlineData("/api/admin/casino/free-spins")]
     [InlineData("/casino-sim/play")]
+    [InlineData("/api/admin/risk/fixtures")]
     public async Task Casino_paths_are_routed(string path)
     {
         using var response = await _client.GetAsync(new Uri(path, UriKind.Relative), TestContext.Current.CancellationToken);
