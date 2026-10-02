@@ -38,6 +38,18 @@ public sealed class HostTests : IClassFixture<HostTests.Factory>
         response.StatusCode.ShouldBe(HttpStatusCode.BadGateway);
     }
 
+    [Theory]
+    [InlineData("/api/casino/launch")]
+    [InlineData("/api/casino/lobby")]
+    [InlineData("/api/admin/casino/free-spins")]
+    [InlineData("/casino-sim/play")]
+    public async Task Casino_paths_are_routed(string path)
+    {
+        using var response = await _client.GetAsync(new Uri(path, UriKind.Relative), TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadGateway);
+    }
+
     [Fact]
     public async Task The_catalogue_is_routed_to_offer()
     {
