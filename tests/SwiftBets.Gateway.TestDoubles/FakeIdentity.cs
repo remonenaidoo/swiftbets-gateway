@@ -36,6 +36,9 @@ public sealed class FakeIdentity(TimeProvider time, string subject = "punter-1",
         }
     }
 
+    public async Task<SessionHandoff?> HandoffAsync(string refreshToken, CancellationToken cancellationToken) =>
+        await RefreshAsync(refreshToken, cancellationToken) is { } device ? new SessionHandoff(device, Issue()) : null;
+
     public Task RevokeAsync(string refreshToken, CancellationToken cancellationToken)
     {
         lock (_gate)

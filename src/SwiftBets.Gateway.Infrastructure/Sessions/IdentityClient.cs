@@ -11,6 +11,12 @@ public sealed class IdentityClient(HttpClient http) : IIdentityClient
     public Task<SessionTokens?> RefreshAsync(string refreshToken, CancellationToken cancellationToken) =>
         PostAsync("auth/refresh", new { refreshToken }, cancellationToken);
 
+    public async Task<SessionHandoff?> HandoffAsync(string refreshToken, CancellationToken cancellationToken)
+    {
+        using var response = await http.PostAsJsonAsync("auth/handoff", new { refreshToken }, cancellationToken);
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<SessionHandoff>(cancellationToken) : null;
+    }
+
     public async Task RevokeAsync(string refreshToken, CancellationToken cancellationToken)
     {
         try
