@@ -39,6 +39,14 @@ public sealed class HostTests : IClassFixture<HostTests.Factory>
     }
 
     [Fact]
+    public async Task The_catalogue_is_routed_to_offer()
+    {
+        using var response = await _client.GetAsync(new Uri("/api/catalog/sports", UriKind.Relative), TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadGateway);
+    }
+
+    [Fact]
     public async Task Metrics_are_exposed()
     {
         var body = await _client.GetStringAsync(new Uri("/metrics", UriKind.Relative), TestContext.Current.CancellationToken);
