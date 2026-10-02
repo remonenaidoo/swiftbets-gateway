@@ -86,6 +86,7 @@ public sealed class HostTests : IClassFixture<HostTests.Factory>
             builder.ConfigureTestServices(services =>
             {
                 services.AddSingleton<ISessionStore, InMemorySessionStore>();
+                services.AddSingleton<IHandoffCodes, InMemoryHandoffCodes>();
                 services.AddSingleton<ISessionLimits>(FixedSessionLimits.None);
                 services.AddSingleton<IIdentityClient>(new FakeIdentity(TimeProvider.System, "operator-1", "Operator"));
             });

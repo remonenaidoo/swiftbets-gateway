@@ -1,3 +1,5 @@
+using System.Text;
+using System.Security.Cryptography;
 using Microsoft.Extensions.Options;
 using SwiftBets.BuildingBlocks.Web;
 using SwiftBets.Contracts.Errors;
@@ -41,6 +43,48 @@ public static class SessionEndpoints
             return tokens.Error is { } error
                 ? error.ToHttpResult(context)
                 : Results.Ok(new { accessToken = tokens.Value!.AccessToken, refreshToken = tokens.Value.RefreshToken, expiresIn = tokens.Value.ExpiresIn });
+        });
+
+        // An app opening a hosted account page in its browser: trades the app's refresh token for its rotated tokens
+        // and a one-minute, single-use link that signs that browser in as a separate device.
+        session.MapPost("/handoff", async (HandoffRequest request, HttpContext context, IIdentityClient identity, IHandoffCodes codes) =>
+        {
+            if (context.Request.Headers[SessionCookies.CsrfHeader] != "1")
+            {
+                return Error.Validation("csrf_required", $"Send {SessionCookies.CsrfHeader}: 1.").ToHttpResult(context);
+            }
+
+            if (!HandoffPages.Contains(request.Next) || string.IsNullOrEmpty(request.RefreshToken))
+            {
+                return Error.Validation("invalid_handoff", "next must be an account page.").ToHttpResult(context);
+            }
+
+            if (await identity.HandoffAsync(request.RefreshToken, context.RequestAborted) is not { } handoff)
+            {
+                return new Error("invalid_refresh_token", "Sign in again.", ErrorKind.Unauthorized).ToHttpResult(context);
+            }
+
+            var code = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            await codes.StoreAsync(HashCode(code), handoff.Browser, TimeSpan.FromMinutes(1));
+            return Results.Ok(new
+            {
+                accessToken = handoff.Device.AccessToken,
+                refreshToken = handoff.Device.RefreshToken,
+                expiresIn = handoff.Device.ExpiresIn,
+                url = $"/api/session/handoff/{code}?next={Uri.EscapeDataString(request.Next!)}",
+            });
+        });
+
+        session.MapGet("/handoff/{code}", async (string code, string? next, HttpContext context, IHandoffCodes codes, BrowserSessions sessions, IOptions<BrowserSessionOptions> options) =>
+        {
+            var target = HandoffPages.Contains(next) ? next! : "/account";
+            if (await codes.TakeAsync(HashCode(code)) is not { } browser)
+            {
+                return Results.Redirect("/account/sign-in");
+            }
+
+            await StartAsync(context, browser, sessions, options);
+            return Results.Redirect(target);
         });
 
         // Who the browser session belongs to, for the UI to decide what to show. Every service still validates the
@@ -116,6 +160,10 @@ public static class SessionEndpoints
     private static IResult Unauthenticated(HttpContext context) =>
         new Error("unauthenticated", "No active session.", ErrorKind.Unauthorized).ToHttpResult(context);
 
+    private static readonly HashSet<string?> HandoffPages = ["/account", "/account/wallet", "/account/safer-gambling"];
+
+    private static string HashCode(string code) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
+
     private static async Task<IResult> StartAsync(HttpContext context, SessionTokens tokens, BrowserSessions sessions, IOptions<BrowserSessionOptions> options)
     {
         var sessionId = await sessions.StartAsync(tokens, DeviceOf(context));
@@ -146,6 +194,8 @@ public static class SessionEndpoints
     }
 
     public sealed record LoginRequest(string Username, string Password);
+
+    public sealed record HandoffRequest(string? RefreshToken, string? Next);
 
     /// <summary>StartedAt and the two limits let the site show reality checks and how long is left.</summary>
     public sealed record SessionInfo(string Subject, IReadOnlyList<string> Roles, DateTimeOffset ExpiresAt, DateTimeOffset StartedAt, int? SessionLimitMinutes, int? RealityCheckMinutes);

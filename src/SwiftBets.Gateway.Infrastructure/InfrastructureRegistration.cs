@@ -26,6 +26,7 @@ public static class InfrastructureRegistration
         services.AddSingleton<IRateLimitCounter, RedisRateLimitCounter>();
         services.AddValidatedOptions<BrowserSessionOptions>(configuration, BrowserSessionOptions.SectionName);
         services.AddSingleton<ISessionStore, RedisSessionStore>();
+        services.AddSingleton<IHandoffCodes, RedisHandoffCodes>();
         services.AddHttpClient<IIdentityClient, IdentityClient>(http => http.BaseAddress = new Uri(Required(configuration, "Gateway:IdentityAddress").TrimEnd('/') + "/"))
             .AddIdempotentResilience();
         services.AddKafkaMessaging(configuration);
