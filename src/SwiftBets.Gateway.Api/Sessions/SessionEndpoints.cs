@@ -1,3 +1,4 @@
+using SwiftBets.Gateway.Domain;
 using System.Text;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Options;
@@ -91,7 +92,7 @@ public static class SessionEndpoints
         // token it receives; this only describes the session back to its owner.
         session.MapGet("/", (HttpContext context, ISessionLimits limits) =>
             Current(context) is { } current && limits.For(current.Session.UserId) is var l
-                ? Results.Ok(new SessionInfo(current.Session.UserId, current.Session.Roles, current.Session.AccessExpiresAt, current.Session.CreatedAt, l.SessionLimitMinutes, l.RealityCheckMinutes))
+                ? Results.Ok(new SessionInfo(current.Session.UserId, current.Session.Roles, JwtClaims.ReadStrings(current.Session.AccessToken, "perm"), current.Session.AccessExpiresAt, current.Session.CreatedAt, l.SessionLimitMinutes, l.RealityCheckMinutes))
                 : Unauthenticated(context));
 
         session.MapPost("/logout", async (HttpContext context, BrowserSessions sessions) =>
@@ -198,7 +199,8 @@ public static class SessionEndpoints
     public sealed record HandoffRequest(string? RefreshToken, string? Next);
 
     /// <summary>StartedAt and the two limits let the site show reality checks and how long is left.</summary>
-    public sealed record SessionInfo(string Subject, IReadOnlyList<string> Roles, DateTimeOffset ExpiresAt, DateTimeOffset StartedAt, int? SessionLimitMinutes, int? RealityCheckMinutes);
+    /// <summary>Permissions are what the console shows; every service still checks them on each call.</summary>
+    public sealed record SessionInfo(string Subject, IReadOnlyList<string> Roles, IReadOnlyList<string> Permissions, DateTimeOffset ExpiresAt, DateTimeOffset StartedAt, int? SessionLimitMinutes, int? RealityCheckMinutes);
 
     public sealed record DeviceInfo(Guid Id, string Device, DateTimeOffset CreatedAt, DateTimeOffset LastSeenAt, bool Current);
 }

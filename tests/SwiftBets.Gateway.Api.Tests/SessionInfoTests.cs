@@ -20,6 +20,7 @@ public sealed class SessionInfoTests(HostTests.Factory factory) : IClassFixture<
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         body.GetProperty("subject").GetString().ShouldBe("operator-1");
         body.GetProperty("roles").EnumerateArray().Select(r => r.GetString()).ShouldBe(["Operator"]);
+        body.GetProperty("permissions").ValueKind.ShouldBe(JsonValueKind.Array);
         body.GetProperty("startedAt").GetDateTimeOffset().ShouldBeLessThanOrEqualTo(DateTimeOffset.UtcNow);
         body.GetProperty("sessionLimitMinutes").ValueKind.ShouldBe(JsonValueKind.Null);
     }
