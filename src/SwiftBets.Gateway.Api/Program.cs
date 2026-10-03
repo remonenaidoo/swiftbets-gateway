@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.HttpOverrides;
 using SwiftBets.BuildingBlocks.Observability;
 using SwiftBets.BuildingBlocks.Web;
 using SwiftBets.Gateway.Api.RateLimiting;
@@ -16,9 +17,21 @@ builder.Services.AddSwiftBetsWeb();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddGatewayApplication();
 builder.Services.AddGatewayInfrastructure(builder.Configuration);
+// The TLS edge is a private-network hop; take its scheme so proxied services see https.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+    options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("10.0.0.0/8"));
+    options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("172.16.0.0/12"));
+    options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("192.168.0.0/16"));
+    options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("127.0.0.0/8"));
+});
 builder.Services.AddReverseProxy().LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 
 var app = builder.Build();
+app.UseForwardedHeaders();
 app.UseSwiftBetsObservability();
 app.UseSwiftBetsWeb();
 app.UseMiddleware<RateLimitMiddleware>();
