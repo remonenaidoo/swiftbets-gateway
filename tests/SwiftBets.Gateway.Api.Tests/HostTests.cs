@@ -39,6 +39,11 @@ public sealed class HostTests : IClassFixture<HostTests.Factory>
     }
 
     [Theory]
+    [InlineData("/api/me/airtime")]
+    [InlineData("/api/me/airtime/products")]
+    [InlineData("/api/me/referrals")]
+    [InlineData("/api/admin/wallet/vouchers")]
+    [InlineData("/api/admin/wallet/vouchers/batches")]
     [InlineData("/api/casino/launch")]
     [InlineData("/api/casino/lobby")]
     [InlineData("/api/admin/casino/free-spins")]
