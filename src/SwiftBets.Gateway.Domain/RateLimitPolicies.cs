@@ -4,6 +4,6 @@ public sealed record RateLimitPolicies(RateLimitPolicy Login, RateLimitPolicy Pl
 {
     public RateLimitPolicy For(string path, string method) =>
         method == "POST" && (path.StartsWith("/api/auth/", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/api/session/", StringComparison.OrdinalIgnoreCase)) ? Login
-        : method == "POST" && path.StartsWith("/api/coupons", StringComparison.OrdinalIgnoreCase) ? Placement
+        : method == "POST" && (path.StartsWith("/api/coupons", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/api/booking-codes", StringComparison.OrdinalIgnoreCase)) ? Placement
         : Default;
 }
