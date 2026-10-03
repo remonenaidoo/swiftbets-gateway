@@ -17,10 +17,11 @@ builder.Services.AddSwiftBetsWeb();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddGatewayApplication();
 builder.Services.AddGatewayInfrastructure(builder.Configuration);
-// The TLS edge is a private-network hop; take its scheme so proxied services see https.
+// The TLS edge is a private-network hop; take its scheme so proxied services see https, and the client address it saw
+// (one hop only) so rate limits count per visitor rather than per edge. A public peer's X-Forwarded-For is ignored.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
-    options.ForwardedHeaders = ForwardedHeaders.XForwardedProto;
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
     options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
     options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("10.0.0.0/8"));
