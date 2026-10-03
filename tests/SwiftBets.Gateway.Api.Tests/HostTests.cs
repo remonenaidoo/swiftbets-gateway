@@ -45,6 +45,8 @@ public sealed class HostTests : IClassFixture<HostTests.Factory>
     [InlineData("/casino-sim/play")]
     [InlineData("/api/admin/risk/fixtures")]
     [InlineData("/api/me/inbox")]
+    [InlineData("/api/admin/reports/daily")]
+    [InlineData("/api/admin/roles")]
     [InlineData("/api/me/notification-preferences")]
     public async Task Casino_paths_are_routed(string path)
     {
